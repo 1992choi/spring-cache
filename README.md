@@ -2,8 +2,18 @@
 - Inflearn > 스프링부트로 직접 만들면서 배우는 대규모 시스템 설계(캐시 전략)
 
 ## 프로젝트 설정
-### 타이틀
-- 내용
+### 레디스
+- 실행
+  - docker run --name cache-redis -d -p 6379:6379 redis:8.2.1
+- 접속
+  - docker exec -it cache-redis redis-cli
+- 명령어 모음
+  - 모든 키 조회
+    - keys *
+  - 데이터 생성
+    - set mykey 'Hello Redis'
+  - 데이터 조회
+    - get mykey
 
 
 ## 개념정리
