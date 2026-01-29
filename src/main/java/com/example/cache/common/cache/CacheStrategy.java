@@ -1,5 +1,6 @@
 package com.example.cache.common.cache;
 
 public enum CacheStrategy {
-    NONE
+    NONE,
+    SPRING_CACHE_ANNOTATION
 }
