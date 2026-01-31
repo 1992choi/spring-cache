@@ -4,7 +4,7 @@
 ## 프로젝트 설정
 ### 레디스
 - 실행
-  - docker run --name cache-redis -d -p 6379:6379 redis:8.2.1
+  - docker run --name cache-redis -d -p 6399:6379 redis:8.2.1
 - 접속
   - docker exec -it cache-redis redis-cli
 - 명령어 모음
