@@ -108,3 +108,20 @@
       - 캐시가 만료되는 순간 대량의 요청이 동시에 DB로 몰려 과부하가 발생하는 문제.
     - Hot Key
       - 특정 키에 요청이 집중되어 해당 캐시 서버나 DB에 부하가 쏠리는 현상.
+
+### Cache Penetration
+- Cache Penetration 이란?
+  - 캐시 관통 
+    - 캐시를 관통해서 Data Source로 요청이 전파되는 현상
+  - 캐시 관통 흐름
+    - 클라이언트가 특정 키로 조회 요청 
+    - 캐시에 없음 (Cache Miss)
+    - DB 조회 → 결과 없음 
+    - 캐시에 저장할 값이 없으니 그대로 종료 
+    - 같은 요청이 계속 들어오면 매번 DB까지 조회됨
+  - 문제점
+    - 캐시에서 트래픽이 제한되지 못하고, Data Source로 전파
+    - Data Source가 모든 부하를 빠르게 받아내지 못한다면, 예기치 못한 장애 위험
+  - 해결방법
+    - Null Object Pattern
+    - Bloom Filter
