@@ -12,12 +12,6 @@ import org.junit.jupiter.api.Test;
 public class NoneStrategyApiTest {
     static final CacheStrategy CACHE_STRATEGY = CacheStrategy.NONE;
 
-    /*
-        TODO: update 시 캐시전략에 대한 확인
-        - update 로직에서 리스트에 대한 캐시 갱신은 하지 않는다고 생각하여, 아래 테스트코드의 update 전후로 'ItemApiTestUtils.readAll(CACHE_STRATEGY, 1L, 2L)' 로직을 추가하여 조회된 data의 값을 확인하였음.
-          - 예상은 수정 전 값인 data가 조회될 것이라고 생각하였지만, updatedData가 정상적으로 조회되었음.
-          - 이렇게 동작하는 매커니즘 확인필요
-     */
     @Test
     void createAndReadAndUpdateAndDelete() {
         ItemResponse created = ItemApiTestUtils.create(CACHE_STRATEGY, new ItemCreateRequest("data"));
