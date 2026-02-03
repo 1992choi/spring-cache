@@ -210,3 +210,13 @@
 - 실무 활용 예시
   - 블랙리스트 필터링, 중복 데이터 검사, 조회 비용이 큰 데이터의 사전 필터링
 
+### Bloom Filter의 한계
+- 데이터 수 증가에 따른 오차율 증가
+  - 초기 설계 시 가정한 데이터 수(n)를 초과하면 오차율이 급격히 증가 (mightContain_whenBloomFilterAddedTooManyData 테스트코드 참고)
+    - 비트 배열이 대부분 1로 채워지며 False Positive가 빈번해짐
+- 한계에 대한 보완 방식
+  - Split / Sharding / Sub Filter는 이 문제를 해결하는 것이 아님
+    - Bloom Filter의 구조적 특성상 오차율 증가 자체는 피할 수 없음
+  - 다만 데이터 분산 또는 추가 검증을 통해
+    - 오차율이 급격히 증가하는 시점을 늦추거나
+    - False Positive로 인한 DB 접근 비용을 줄이는 보완 전략으로 사용됨
