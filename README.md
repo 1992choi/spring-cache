@@ -220,3 +220,33 @@
   - 다만 데이터 분산 또는 추가 검증을 통해
     - 오차율이 급격히 증가하는 시점을 늦추거나
     - False Positive로 인한 DB 접근 비용을 줄이는 보완 전략으로 사용됨
+
+### Bloom Filter - Split
+- Redis 비트맵 크기 제한
+  - Redis의 비트맵은 최대 2^32 비트(512MB)까지만 지원
+  - 최대 offset은 2^32 - 1로 제한됨
+  - 입력 데이터 수(n)와 오차율(p)에 따라 이보다 더 큰 Bloom Filter가 필요할 수 있음
+- 문제 상황
+  - 필요한 Bloom Filter 크기가 3 × 2^32 비트인 경우
+    - Redis 제약으로 인해 단일 Key로는 생성 불가능
+    - 거대한 Bloom Filter를 하나의 비트맵으로 표현할 수 없음
+- Split 개념
+  - Split은 Bloom Filter 분할 전략
+  - 최대 크기인 2^32 비트짜리 Bloom Filter 여러 개로 나누어 구성
+  - 물리적으로는 여러 개의 작은 Bloom Filter
+  - 논리적으로는 하나의 거대한 Bloom Filter처럼 동작
+- Split 방식 예시
+  - Split 1 : 0 ~ (2^32 - 1) 비트
+  - Split 2 : 2^32 ~ (2 × 2^32 - 1) 비트
+  - Split 3 : (2 × 2^32) ~ (3 × 2^32 - 1) 비트
+- 애플리케이션 처리 방식
+  - 해시 결과로 나온 비트 위치(offset)를 기준으로
+    - 어느 Split에 속하는지 계산
+    - 해당 Split의 Bloom Filter Key에 접근
+  - 각 Split은 서로 다른 Redis Key로 관리
+- Split 전략의 효과
+  - Redis의 비트맵 크기 제한을 우회하여
+    - 논리적으로 매우 큰 Bloom Filter 구성 가능
+  - Split Key가 서로 다르기 때문에
+    - Redis Cluster 환경에서는 샤딩 전략에 따라
+    - 각 Split이 여러 노드에 자연스럽게 분산될 수 있음
