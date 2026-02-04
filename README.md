@@ -250,3 +250,83 @@
   - Split Key가 서로 다르기 때문에
     - Redis Cluster 환경에서는 샤딩 전략에 따라
     - 각 Split이 여러 노드에 자연스럽게 분산될 수 있음
+
+### Bloom Filter - Split의 한계
+- 단일 필터 구조
+  - 현재 Bloom Filter는 단일하게 관리됨
+    - Split 전략은 비트 배열을 논리적으로 나눈 것일 뿐
+      - 논리적으로는 여러 Split으로 분리되어 보이지만
+      - 전체적으로는 하나의 Bloom Filter를 구성함
+- 조회 방식의 구조적 한계
+  - Bloom Filter 조회 시
+    - 하나의 값에 대해 여러 해시 함수가 생성한 인덱스를 모두 확인해야 함
+      - 해당 인덱스가 어느 Split에 속하는지와 무관하게
+      - 결과적으로 모든 Split을 대상으로 조회가 발생
+- 부하 집중 문제
+  - 논리적으로만 분리되어 있고 물리적으로는 단일 구조이기 때문에
+    - 모든 조회·쓰기 트래픽이 하나의 Bloom Filter에 집중될 수 있음
+      - 읽기 트래픽 증가
+      - 쓰기 트래픽 증가
+      - 저장 공간 사용량 증가
+- 한계에 대한 대응
+  - 이러한 단일 구조로 인한 부하 집중을 완화하기 위한 방법으로
+    - Bloom Filter를 물리적으로 분산하는 Sharding 기법을 적용할 수 있음
+
+### Bloom Filter - Sharding
+- Sharding은 하나의 Bloom Filter에 집중되던 데이터를 여러 개의 Bloom Filter로 분산하여 관리하는 전략
+- 단일 Bloom Filter에 집중되던 부하를 여러 Shard로 분산할 수 있음
+  - 읽기 트래픽 분산
+  - 쓰기 트래픽 분산
+  - 저장 공간 분산
+- Sharding은 애플리케이션 레벨에서 적용할 수 있는 전략
+  - Redis 내부 기능이 아닌, Key 설계 방식으로 구현
+- 적용 방식
+  - 하나의 Bloom Filter 대신 N개의 Bloom Filter를 사용
+  - 각 Bloom Filter는 서로 다른 Key를 가짐
+    - 예: bloom-filter:0, bloom-filter:1, bloom-filter:2
+  - 조회 및 삽입 시 Shard Index를 계산하여 특정 Bloom Filter만 접근
+    - shardIndex = hash(value) % N
+- 구조 변화에 따른 효과
+  - 단일 Bloom Filter 사용 시
+    - Client → Bloom Filter (key=bloom-filter)
+    - 단일 Key에 트래픽과 저장 공간이 집중됨
+      - Hot Key 문제 발생 가능
+  - Sharding 적용 시
+    - Client → Bloom Filter (key=bloom-filter:0)
+    - Client → Bloom Filter (key=bloom-filter:1)
+    - Client → Bloom Filter (key=bloom-filter:2)
+    - Key가 분리되면서 Redis Cluster에서도 노드별로 자연스럽게 분산
+      - 트래픽 집중 완화
+      - 저장 공간 분산
+      - Hot Key 문제 해결
+- Split 전략과의 차이
+  - Split 전략
+    - Bloom Filter를 물리적으로 여러 조각으로 분할
+    - 논리적으로는 하나의 Bloom Filter로 동작
+    - 모든 Split을 항상 조회해야 함
+  - Sharding 전략
+    - Bloom Filter를 물리적·논리적으로 모두 분산
+    - 특정 데이터는 특정 Shard의 Bloom Filter만 조회
+  - 서로 다른 전략이므로 중첩 적용 가능
+    - 예: Sharding으로 분산한 뒤, 각 Shard 내부를 Split으로 다시 분할 (`강의에서는 중첩 적용하였음`)
+- 메모리 효율 관점의 장점
+  - Bloom Filter는 데이터 수(n)가 증가할수록 오차율(p)이 급격히 1에 수렴하는 특성을 가짐
+  - 단일 Bloom Filter로 대량 데이터를 관리할 경우
+    - 낮은 오차율을 유지하기 위해 매우 큰 메모리가 필요
+      - 예: n=100,000,000, m=512MB
+  - Sharding 적용 시
+    - 데이터를 여러 Bloom Filter로 나누어 관리
+      - 예: 1억 개 데이터를 10개의 Shard로 분산
+      - 각 Shard는 더 적은 데이터 수를 가짐
+    - 상대적으로 작은 Bloom Filter 크기로도 충분히 낮은 오차율 유지 가능
+    - 결과적으로 전체 메모리 사용량을 줄일 수 있음
+- 해시 함수 개수(k)와의 관계
+  - 오차율(p)을 낮추기 위해 해시 함수 수(k)를 늘릴 수도 있음
+    - 하지만 k가 증가할수록 조회·삽입 시 연산 비용 증가
+  - Sharding을 적용하면
+    - 데이터 수 자체가 분산되므로
+    - k를 과도하게 늘리지 않아도 목표한 오차율을 만족하는 경우가 많음
+- 정리
+  - Sharding은 Bloom Filter의 부하를 분산하는 데 초점을 둔 전략
+  - Hot Key 문제를 해결하고 트래픽과 저장 공간을 고르게 분산할 수 있음
+  - 메모리 효율과 성능을 동시에 개선할 수 있는 현실적인 접근 방식
