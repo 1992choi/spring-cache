@@ -6,4 +6,5 @@ public enum CacheStrategy {
     NULL_OBJECT_PATTERN,
     BLOOM_FILTER,
     SPLIT_BLOOM_FILTER,
+    SPLIT_SHARDED_BLOOM_FILTER
 }
