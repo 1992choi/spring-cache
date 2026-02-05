@@ -330,3 +330,71 @@
   - Sharding은 Bloom Filter의 부하를 분산하는 데 초점을 둔 전략
   - Hot Key 문제를 해결하고 트래픽과 저장 공간을 고르게 분산할 수 있음
   - 메모리 효율과 성능을 동시에 개선할 수 있는 현실적인 접근 방식
+
+### Bloom Filter – Sub Filter
+- 개요
+  - Bloom Filter는 데이터가 많아질수록 false positive 확률이 증가하는 구조적 한계를 가진다.
+  - Split, Sharding 전략을 적용하더라도 각 Bloom Filter는 고정된 비트 수를 사용하므로 결국 수용 한계에 도달한다.
+  - 따라서 일정 시점에는 Bloom Filter의 확장이 필요하다.
+- 기존 확장 방식의 한계
+  - Bloom Filter는 비트 수가 고정되어 있어 기존 필터를 직접 확장할 수 없다.
+  - 삭제가 불가능하고, 고정된 비트 범위 내에서만 연산이 수행된다.
+  - 일반적인 확장 방식은 다음과 같은 절차를 요구한다.
+    - 더 많은 데이터를 수용할 수 있는 신규 Bloom Filter 생성
+    - 기존 데이터 전체를 신규 Bloom Filter로 마이그레이션
+    - 실시간으로 유입되는 데이터에 대해 이중 쓰기 처리
+    - 기존 Bloom Filter를 신규 Bloom Filter로 교체
+  - 데이터가 많고 실시간 유입이 많은 환경에서는 이 과정 자체가 큰 부담이 된다.
+- Sub Filter 개념
+  - 기존 Bloom Filter를 교체하지 않고, 새로운 Bloom Filter를 추가하는 방식으로 확장한다.
+  - 수용 한계에 도달하면 기존 필터를 유지한 채 **새로운 Sub Filter를 생성**한다.
+  - 이후 유입되는 데이터는 가장 마지막에 생성된 Sub Filter에만 저장된다.
+  - 기존 Bloom Filter의 비트 수를 늘리는 것이 아니라, Bloom Filter의 개수를 늘리는 방식이다.
+- 동작 방식 예시
+  - 초기 상태
+    - 데이터 1,000개, 오차율 0.01을 기준으로 Bloom Filter A가 생성되어 있다.
+  - 데이터가 계속 추가되어 Bloom Filter A의 수용 한계를 초과한 시점
+    - Bloom Filter A는 유지한 채 Bloom Filter B(Sub Filter)를 새로 생성한다.
+    - 이후 신규 데이터는 Bloom Filter B에만 입력된다.
+  - Bloom Filter B 역시 수용 한계를 초과하면
+    - Bloom Filter C(Sub Filter)를 추가로 생성하고 신규 데이터는 Bloom Filter C에 입력된다.
+- 조회 방식
+  - 데이터 존재 여부를 확인할 때는 모든 Bloom Filter를 조회한다.
+  - 하나라도 true를 반환하면 데이터가 존재할 가능성이 있다고 판단한다.
+  - 모든 Bloom Filter가 false를 반환하면 데이터는 존재하지 않는 것으로 판단한다.
+  - Sub Filter가 늘어날수록 조회 횟수는 증가하지만, 각 Bloom Filter는 O(1)로 조회되므로 개수를 제한하면 성능 부담은 크지 않다.
+- Sub Filter 개수 제한
+  - Sub Filter가 과도하게 늘어나면 조회 성능 저하 및 메모리 사용량 증가가 발생할 수 있다.
+  - 최대 Sub Filter 개수를 제한하고, 이를 초과하면 한 번에 큰 Bloom Filter로 재구성하는 전략을 사용할 수 있다.
+  - 예시
+    - 기존 Bloom Filter 1개 + Sub Filter 최대 2개로 제한
+- Sub Filter 생성 기준
+  - Bloom Filter는 내부적으로 데이터 수나 비트 사용률을 관리하지 않으므로 별도의 기준이 필요하다.
+  - 사용할 수 있는 전략
+    - Sub Filter별 입력 데이터 수를 직접 관리
+    - 비트 사용률을 주기적으로 샘플링
+    - false positive 비율을 모니터링
+  - 본 전략에서는 구현과 비용이 단순한 **입력 데이터 수 직접 관리 방식**을 사용한다.
+    - 데이터 입력 시 카운트를 증가시키고, 임계값 초과 시 Sub Filter 생성
+- Sub Filter 크기 전략
+  - 모든 Sub Filter를 동일한 크기로 생성하면 빠르게 수용 한계에 도달할 수 있다.
+  - Sub Filter를 생성할 때마다 크기를 2배씩 증가시키는 전략을 사용한다.
+    - 첫 번째: 1,000
+    - 두 번째: 2,000
+    - 세 번째: 4,000
+- Sub Filter 오차율 전략
+  - 각 Bloom Filter는 독립적인 오차율을 가지므로 Sub Filter가 늘어날수록 전체 오차율은 증가한다.
+  - 예시
+    - 오차율 0.01 Bloom Filter 3개
+    - 전체 오차율 ≈ 1 - (0.99 × 0.99 × 0.99) ≈ 3%
+  - 이를 완화하기 위해 Sub Filter가 생성될수록 오차율을 점진적으로 낮춘다.
+    - 감소율 0.5 적용
+    - 예시
+      - Bloom Filter A: 0.01
+      - Sub Filter B: 0.005
+      - Sub Filter C: 0.0025
+    - 전체 오차율 ≈ 1 - (0.99 × 0.995 × 0.9975) ≈ 1.5%
+- 정리
+  - Sub Filter는 Bloom Filter를 교체하지 않고 확장하기 위한 현실적인 전략이다.
+  - 대규모 데이터와 실시간 유입 환경에서도 마이그레이션 부담을 줄일 수 있다.
+  - 조회 비용은 증가하지만, 제한된 Sub Filter 개수 내에서는 충분히 감내 가능한 수준이다.
